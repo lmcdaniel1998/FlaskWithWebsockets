@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+{% block content %}
+    <h1>Hi, {{ current_user.username }}!</h1>
+	<!DOCTYPE html>
+	  <html lang="en">
+	  <head>
+	    <title>Flask_Chat_App</title>
+	    <style>
+	    body {
+	      padding: 1rem;
+	      background-color: lightgrey;
+	    }
+	    .add-btn, .clear-btn, .submit-btn{
+	      font-size: 1.5rem;
+	      margin-bottom: 1rem;
+	    }
+	    .output {
+	/*
+	      width: 80rem;
+	      min-height: 20rem;
+	*/
+	      display: block;
+	      font-size: 1.5rem;
+	      font-family: Consolas,monaco,monospace;
+	    }
+	      </style>
+
+	<!--
+	      Use some day causes my_disconnect_callback() to be called when user leaves the page.
+	      <body onbeforeunload="my_disconnect_callback();">
+	-->
+
+
+
+	  </head>
+	  <body>
+	  	  <!--<h2>Your Session Passcode:</h2>-->
+	  	  <h2 id="sessionPasscode">Your Session Passcode: </h2>
+	      <h2 title = "ChatInput" > Messages for {{ current_user.username }}: <span title = "Your email: {{ current_user.email }} "> {{ current_user.nickname }} </span></h2>
+	      <p id = "username" style="color:lightgrey">{{ current_user.username}}</p>
+	      <p id = "email" style="color:lightgrey">{{ current_user.email}}</p>
+
+	      <div id="myDIV">
+	         <textarea id="output" class="output"  rows="9" cols="85" readonly></textarea>
+	      </div>
+	    <br>
+
+	      <form  action="inputText" method="POST">
+	        <input id="myInput" type="text" size = "100" class="message"  placeholder="Enter Message Here"/>
+
+	    </form>
+	      <div>
+	        <button id="add-btn" class="add-btn">Submit</button>
+	        <button id="clear-btn" class="clear-btn">Clear</button>
+	      </div>
+	           
+
+	    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+	    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+	    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/1.7.3/socket.io.min.js"></script>
+	    <script type="text/javascript">
+	    	// create session passcode and display to user
+	    	var firstThree = Math.floor((Math.random() * 1000) + 1);
+	    	var secondThree = Math.floor((Math.random() * 1000) + 1);
+	    	var passcode = (firstThree.toString()).concat((secondThree.toString()));
+	    	var passcode_place = document.getElementById("sessionPasscode");
+	    	passcode_place.innerHTML += passcode;
+
+	    	// inital strings for namespace and server address
+	    	var serverAddr = 'http://localhost:5000/';
+	    	var ns = '/' 
+
+	    	//function emitMessage() {
+			//	console.log('in emit of message');
+			//    socket.emit('web_to_server', user_input);
+			//};
+
+
+			// get username with whitespaces removed
+			var username = (document.getElementById("username").textContent).split(" ").join("");
+			console.log(username);
+
+			// get email with whitespaces removed
+			var email = (document.getElementById("email").textContent).split(" ").join("");
+			console.log(email);
+
+			// create namespace string
+			var nameSpace = ns.concat(username);
+			console.log(nameSpace);
+			// create socket connection string
+			var socket_connection = serverAddr.concat(username);
+			console.log(socket_connection);
+
+			// establish socket connection
+			var socket = io.connect(socket_connection);
+
+			// get input text field
+			var myInput = document.getElementById("myInput");
+			console.log(myInput)
+
+			var mySID = "";
+
+			var MASTER = false;
+
+			// Execute a function when the user releases a key on the keyboard
+	        myInput.addEventListener("keydown", function(event) {
+	          // Number 13 is the "Enter" key on the keyboard
+	            if (event.keyCode === 13) {
+	                console.log("in enter key processing")
+	                event.preventDefault();
+	                // Trigger the button element with a click
+	                document.getElementById("add-btn").click();
+	            }
+	        });
+
+	        // sends input text to all esp devices
+	        function emitMessage() {
+	        	//if (MASTER === true) {
+				console.log('in emit of message');
+				let user_input = $( 'input.message' ).val();
+			    socket.emit('web_to_server', user_input);
+			    //}
+			};
+
+			// puts text in received message into text box
+			function addToTextarea($ta, text) {
+	            var val = $ta.val();
+	            //if (val) {
+	                //$ta.val(val + '\n' + text);
+	            //} else {
+	            $ta.val(text);
+	            //}
+	            $ta.scrollTop($ta[0].scrollHeight);
+	        };
+
+
+
+			//document.getElementById("add-btn").onclick = function() {
+			//	console.log("connect button pressed");
+			//	emitMessage();
+			//};
+
+			// sends server the webclient information after connection
+			socket.on('connect', function() {
+				console.log('I\'m connected!')
+				//socket.emit('my event', 'I\'m connected!');
+				//socket.emit('webClientUsername', username);
+				//socket.emit('webClientEmail', email);
+			});
+
+			// receives messages from server that are sent to web from esps
+			socket.on('server_to_web', (msg) => {
+				//if (MASTER === true) {
+				console.log('in server -> web')
+				addToTextarea($('#output'), msg)
+				console.log(msg);
+				//}
+			});
+
+			// after connect, server will inform web client if it is the first
+			// client to connect to the namespace. Master = false, you are first
+			// web client, Master = true, namespace already has a master.
+			// send master = true, your sid, and passcode if you are the first
+			socket.on('on_web_connect', (msg) => {
+				mySID = msg.sid;
+				// check master condition
+				if (msg.master === false && nameSpace === msg.namespace) {
+					// you are first web client
+					// send back your sid and session passcode
+					var returnData = {"master":true, "masterSid":msg.sid, "passcode":passcode};
+					//var returnData = {"m":1, "masterSid":msg.sid, "passcode":passcode};
+					var jsonString = JSON.stringify(returnData);
+					socket.emit('establishWebMaster', jsonString);
+				}
+				else {
+					socket.disconnect();
+				}
+			});
+
+			// after this message has been received you are the master of the 
+			// namespace and can now send and receive messages to other clients
+			//socket.on('webMasterConfirmation', (msg) => {
+			//	if (msg.sid === mySID) {
+			//		MASTER = true;
+			//		console.log('you now have control over namespace');
+			//	}
+			//});
+
+			//socket.on('on_connect', function(msg) {
+			//	addToTextarea($('#output'), msg)
+			//	console.log(msg)
+			//});
+
+			$('#add-btn').click(function() {
+	            //addToTextarea($('#output'), $( 'input.message' ).val());
+	            console.log("in add button code " + $( 'input.message' ).val());
+	            emitMessage();
+	            $( 'input.message' ).val( '' ).focus();
+
+	        });
+
+	        $('#clear-btn').click(function() {
+	            $('#output').val('');
+	            $( 'input.message' ).val( '' ).focus();
+	        });
+
+			//socket.on('server response', function(msg) {
+			//	console.log(msg);
+			//});
+
+	    	
+	        // Get the input field
+	        //var myInput = document.getElementById("myInput");
+
+	        //console.log(myInput)
+
+	        // Execute a function when the user releases a key on the keyboard
+	        //myInput.addEventListener("keydown", function(event) {
+	          // Number 13 is the "Enter" key on the keyboard
+
+	            //if (event.keyCode === 13) {
+	                //console.log("in enter key processing")
+	                //event.preventDefault();
+	                // Trigger the button element with a click
+	                //document.getElementById("add-btn").click();
+	            //}
+	        //});
+
+	        //function addToTextarea($ta, text) {
+	            //var val = $ta.val();
+	            //if (val) {
+	                //$ta.val(val + '\n' + text['nickname'] + ':  ' + text['message']);
+	            //} else {
+	                //$ta.val(text['nickname'] + ':  ' + text['message']);
+	            //}
+	            //$ta.scrollTop($ta[0].scrollHeight);
+	        //};
+
+	        //function emitMessage() {
+	            //console.log('in emit of message');
+	            //let user_email = '{{ current_user.email }}';
+	            //let nickname = '{{ current_user.nickname }}';
+	            //let user_input = $( 'input.message' ).val();
+	            //socket.emit( 'toServer', {
+	                //user_email : user_email,
+	                //nickname: nickname,
+	                //message : user_input
+	            //});
+	        //};
+
+	        //function processUpdate(msg) {
+	        //    console.log(msg)
+	        //};
+
+	        //function processInCommingMsg(msg) {
+	            //console.log("processing incoming message")
+	            //console.log( msg);
+	//            if( typeof msg.nickname !== 'undefined') {
+	//                if ( msg.user_email === '{{ current_user.email }}' ) {
+	            //addToTextarea($('#output'), msg)
+	            //    }
+	        //};
+	        //};
+
+	        //var id = {{ current_user.id }}
+	        //console.log(id);
+	//        var queryString = 'Id=' + id
+	//        console.log(queryString)
+	//        var socket = io.connect('http://' + document.domain + ':' + location.port + aNamespace);
+	//        var socket = io.connect('http://' + document.domain + '/4' + ':' + location.port);
+	        //var socket = io.connect('http://localhost:5000/' + {{ current_user.id }} );
+
+	        //console.log('after connect')
+
+	        //console.log(document.domain)
+
+	        //socket.on( 'connected', function(msg) {
+	            //console.log('in connected')
+	            //nickname = msg['nickname']
+	            //message = "{{ nickname }} connected"
+	            //console.log('connected {{ nickname }}');
+	            //processInCommingMsg(msg);
+
+	        //});
+
+	//        socket.on( 'userDisconnected', function(msg) {
+	//            nickname = msg['nickname'']
+	//            message = "{{ nickname }} connected"
+	//            console.log('disconnected {{ nickname }}');
+	//            processInCommingMsg(msg);
+	//            console.log('in userDisconnected - needs work to pass nickname')
+	//        });
+
+
+	        //socket.on( 'connect', function() {
+	            //console.log('connect nickname: {{ current_user.nicname }}')
+	            //console.log('in connect ');
+	//            let user_email = '{{ current_user.email }}';
+	//            let nickname = '{{ current_user.nickname }}';
+	//            let user_input = "Connected";
+	//            socket.emit( 'toServer', {
+	//                user_email : user_email,
+	//                nickname : nickname,
+	//                message : "connected"
+	//            });
+	        //});
+
+	        //socket.on('fromServer', function( msg ) {
+	            //console.log( msg )
+	            //processInCommingMsg( msg );
+	        //});
+	        /*
+	        $('#add-btn').click(function() {
+	            //addToTextarea($('#output'), $( 'input.message' ).val());
+	            console.log("in add button code " + $( 'input.message' ).val());
+	            emitMessage();
+	            $( 'input.message' ).val( '' ).focus();
+
+	        });
+
+
+	        $('#clear-btn').click(function() {
+	            $('#output').val('');
+	            $( 'input.message' ).val( '' ).focus();
+	        });
+	        */
+
+	    </script>
+
+	    {% if current_user.is_authenticated %}
+	    	Hi {{ current_user.username }}!
+	    {% endif %}
+
+	  </body>
+	  </html>
+
+{% endblock %}
