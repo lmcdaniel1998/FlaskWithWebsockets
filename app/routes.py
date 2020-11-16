@@ -112,14 +112,14 @@ class MyNamespace(Namespace):
     def on_connect(self):
         print(current_user)
         if self.master is False:                # checks if namespace has a master
-            #if current_user.is_authenticated:   # if no master incomming connection must be authenticated 
-            if request.args.get('fail'):
-                return False
-            print('authenticated sid: ' + request.sid)
-            # send ns and master
-            data = {"namespace":self.ns, "sid":request.sid, "master":self.master}
-            #data = {"namespace":self.ns, "sid":request.sid, "m":self.m}
-            socketio.emit('on_web_connect', data, namespace=self.ns)
+            if current_user.is_authenticated:   # if no master incomming connection must be authenticated 
+                if request.args.get('fail'):
+                    return False
+                print('authenticated sid: ' + request.sid)
+                # send ns and master
+                data = {"namespace":self.ns, "sid":request.sid, "master":self.master}
+                #data = {"namespace":self.ns, "sid":request.sid, "m":self.m}
+                socketio.emit('on_web_connect', data, namespace=self.ns)
         else:
             if request.args.get('fail'):
                     return False
